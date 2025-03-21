@@ -7,23 +7,18 @@ from pynput.mouse import Listener
 import typer
 from rich.progress import track
 from rich import print as rprint
-from sys import argv
 
 SAMPLE_RATE = 0.01
-GRACE_PERIOD = 0
-
-offset_x = 0
-offset_y = 0
-gen_image = False
-filename = ""
 
 def record_movements(
     duration: int,
+    grace: int,
+    offset: tuple[int,int]
 ) -> tuple[np.ndarray[np.uint16], np.ndarray[np.uint16]]:
     """Records cursor movements for the given duration"""
     for _ in track(
-        range(GRACE_PERIOD * 100),
-        description=f"Waiting for {GRACE_PERIOD} seconds before recording...",
+        range(grace * 100),
+        description=f"Waiting for {grace} seconds before recording...",
     ):
         time.sleep(0.01)
 
@@ -31,6 +26,8 @@ def record_movements(
     y_input = np.array([], dtype=np.uint16)
 
     def on_move(x: int, y: int) -> None:
+        x -= offset[0]
+        y -= offset[1]
         """Records cursor movements"""
         nonlocal x_input, y_input
         x_input = np.append(x_input, x)
@@ -86,8 +83,8 @@ def draw_image(
     # account for any offset in coordinate system
     x_max = np.max(x_input)
     y_max = np.max(y_input)
-    screen_width_px = max(screen_width_px, x_max, x_mean+x_distance+px/2)
-    screen_height_px = max(screen_height_px, y_max, y_mean+y_distance+px/2)
+    screen_width_px = max(screen_width_px, x_max, x_mean+x_distance_px/2)
+    screen_height_px = max(screen_height_px, y_max, y_mean+y_distance_px/2)
 
     img = Image.new("RGB",(screen_width_px, screen_height_px))
     hue = 0
@@ -114,8 +111,9 @@ def draw_image(
 def write_to_file(
     x_input: np.ndarray[np.uint16],
     y_input: np.ndarray[np.uint16],
+    filename: str
 ):
-    f = open("output.txt","a")
+    f = open(filename,"a")
     for i in range(len(x_input)):
         f.write(f"{x_input[i]} {y_input[i]}\n")
 
@@ -174,11 +172,12 @@ def main(
     screen_width_px: int,
     screen_height_px: int,
     tablet_width_mm: float,
-    tablet_height_mm: float
+    tablet_height_mm: float,
     duration: int,
-    offset: str = "0,0",
+    offset: tuple[int,int] = (0,0),
     image: bool = False,
-    file: str = ""
+    file: str = "",
+    grace: int = 5.0
 ):
     innergameplay_height_px = int((864 / 1080) * screen_height_px)
     innergameplay_width_px = int((1152 / 1920) * screen_width_px)
@@ -191,7 +190,7 @@ def main(
 
 
 
-    x_input, y_input = record_movements(duration)
+    x_input, y_input = record_movements(duration,grace,offset)
     x_distance_px, y_distance_px, x_mean, y_mean = analyze_data(
         x_input=x_input,
         y_input=y_input,
@@ -226,6 +225,9 @@ def main(
             tablet_width_mm,
             tablet_height_mm,
             duration,
+            offset,
+            image,
+            file,
         )
     rprint("===================")
     rprint("Thank you for using the Area Calculator!")
