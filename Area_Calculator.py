@@ -1,14 +1,21 @@
 import time
+from os import _exit
+from PIL import Image, ImageDraw, ImageColor
 from typing import Annotated
 import numpy as np
 from pynput.mouse import Listener
 import typer
 from rich.progress import track
 from rich import print as rprint
+from sys import argv
 
 SAMPLE_RATE = 0.01
-GRACE_PERIOD = 5
+GRACE_PERIOD = 0
 
+offset_x = 0
+offset_y = 0
+gen_image = False
+filename = ""
 
 def record_movements(
     duration: int,
@@ -66,6 +73,52 @@ def find_peak_near_extremes(
 
     return min_peak, max_peak
 
+def draw_image(
+    x_input: np.ndarray[np.uint16],
+    y_input: np.ndarray[np.uint16],
+    screen_width_px: int,
+    screen_height_px: int,
+    x_distance_px: int,
+    y_distance_px: int,
+    x_mean: int,
+    y_mean : int
+):
+    # account for any offset in coordinate system
+    x_max = np.max(x_input)
+    y_max = np.max(y_input)
+    screen_width_px = max(screen_width_px, x_max, x_mean+x_distance+px/2)
+    screen_height_px = max(screen_height_px, y_max, y_mean+y_distance+px/2)
+
+    img = Image.new("RGB",(screen_width_px, screen_height_px))
+    hue = 0
+    color = ImageColor.getrgb(f"hsv({hue},100%,100%)")
+    color_increment = 240/len(x_input)
+    for i in range(len(x_input)-1):
+        shape = [(x_input[i],y_input[i]),(x_input[i+1],y_input[i+1])]
+        drawer = ImageDraw.Draw(img)
+        drawer.line(shape, color, width=3)
+
+        hue += color_increment
+        color = ImageColor.getrgb(f"hsv({hue},100%,100%)")
+
+
+    top_left = (x_mean-x_distance_px/2, y_mean-y_distance_px/2)
+    top_right = (x_mean+x_distance_px/2, y_mean-y_distance_px/2)
+    bottom_left = (x_mean-x_distance_px/2, y_mean+y_distance_px/2)
+    bottom_right = (x_mean+x_distance_px/2, y_mean+y_distance_px/2)
+    shape = [top_left,top_right,bottom_right,bottom_left,top_left]
+    drawer.line(shape, fill="white", width=4)
+
+    img.show()
+
+def write_to_file(
+    x_input: np.ndarray[np.uint16],
+    y_input: np.ndarray[np.uint16],
+):
+    f = open("output.txt","a")
+    for i in range(len(x_input)):
+        f.write(f"{x_input[i]} {y_input[i]}\n")
+
 
 def analyze_data(
     x_input: np.ndarray[np.uint16],
@@ -115,26 +168,17 @@ def analyze_data(
         f" [green]{x_distance_mm:.2f} x {y_distance_mm:.2f} mm [/green]"
     )
     rprint("===================")
-
+    return x_distance_px, y_distance_px, x_mean, y_mean
 
 def main(
-    screen_width_px: Annotated[
-        int, typer.Option(prompt="Enter your screen width in pixels", min=800)
-    ],
-    screen_height_px: Annotated[
-        int, typer.Option(prompt="Enter your screen height in pixels", min=600)
-    ],
-    tablet_width_mm: Annotated[
-        float,
-        typer.Option(prompt="Enter your full active tablet area width in mm", min=1),
-    ],
-    tablet_height_mm: Annotated[
-        float,
-        typer.Option(prompt="Enter your full active tablet area height in mm", min=1),
-    ],
-    duration: Annotated[
-        int, typer.Option(prompt="Enter map duration in seconds", min=10)
-    ],
+    screen_width_px: int,
+    screen_height_px: int,
+    tablet_width_mm: float,
+    tablet_height_mm: float
+    duration: int,
+    offset: str = "0,0",
+    image: bool = False,
+    file: str = ""
 ):
     innergameplay_height_px = int((864 / 1080) * screen_height_px)
     innergameplay_width_px = int((1152 / 1920) * screen_width_px)
@@ -145,8 +189,10 @@ def main(
         prompt_suffix=" ",
     )
 
+
+
     x_input, y_input = record_movements(duration)
-    analyze_data(
+    x_distance_px, y_distance_px, x_mean, y_mean = analyze_data(
         x_input=x_input,
         y_input=y_input,
         tablet_width_mm=tablet_width_mm,
@@ -154,6 +200,23 @@ def main(
         innergameplay_width_px=innergameplay_width_px,
         innergameplay_height_px=innergameplay_height_px,
     )
+    if image:
+        draw_image(
+            x_input=x_input,
+            y_input=y_input,
+            screen_width_px=screen_width_px,
+            screen_height_px=screen_height_px,
+            x_distance_px=x_distance_px,
+            y_distance_px=y_distance_px,
+            x_mean=x_mean,
+            y_mean = y_mean
+        )
+    if file:
+        write_to_file(
+                x_input=x_input,
+                y_input=y_input,
+                filename=file
+        )
 
     again = typer.confirm("Want to record again?", default=True, prompt_suffix=" ")
     if again:
