@@ -1,0 +1,6 @@
+Pillow
+typing
+numpy
+pynput
+typer
+rich
