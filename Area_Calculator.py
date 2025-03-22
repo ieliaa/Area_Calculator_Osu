@@ -86,9 +86,9 @@ def draw_image(
     screen_width_px = max(screen_width_px, x_max, x_mean+x_distance_px/2)
     screen_height_px = max(screen_height_px, y_max, y_mean+y_distance_px/2)
 
-    img = Image.new("RGB",(screen_width_px, screen_height_px))
+    img = Image.new("HSV",(screen_width_px, screen_height_px))
     hue = 0
-    color = ImageColor.getrgb(f"hsv({hue},100%,100%)")
+    color = (int(hue),360,360)
     color_increment = 240/len(x_input)
     for i in range(len(x_input)-1):
         shape = [(x_input[i],y_input[i]),(x_input[i+1],y_input[i+1])]
@@ -96,7 +96,7 @@ def draw_image(
         drawer.line(shape, color, width=3)
 
         hue += color_increment
-        color = ImageColor.getrgb(f"hsv({hue},100%,100%)")
+        color = (int(hue),360,360)
 
 
     top_left = (x_mean-x_distance_px/2, y_mean-y_distance_px/2)
