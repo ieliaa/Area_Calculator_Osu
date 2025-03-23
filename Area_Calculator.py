@@ -1,5 +1,4 @@
 import time
-from os import _exit
 from PIL import Image, ImageDraw, ImageColor
 from typing import Annotated
 import numpy as np
